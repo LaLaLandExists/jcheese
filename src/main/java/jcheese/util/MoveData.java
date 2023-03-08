@@ -47,34 +47,34 @@ public class MoveData {
   };
   
   public interface IScanner {
-		int run(long bb);
-	}
+    int run(long bb);
+  }
 
-	public static final IScanner[] scanners = {
-		BitBoard::bitScanForward, // NORTH
-		BitBoard::bitScanForward, // EAST
-		BitBoard::bitScanReverse, // SOUTH
-		BitBoard::bitScanReverse, // WEST
-		BitBoard::bitScanForward, // NORTHEAST
-		BitBoard::bitScanReverse, // SOUTHEAST
-		BitBoard::bitScanReverse, // SOUTHWEST
-		BitBoard::bitScanForward, // NORTHWEST
-	};
+  public static final IScanner[] scanners = {
+    BitBoard::bitScanForward, // NORTH
+    BitBoard::bitScanForward, // EAST
+    BitBoard::bitScanReverse, // SOUTH
+    BitBoard::bitScanReverse, // WEST
+    BitBoard::bitScanForward, // NORTHEAST
+    BitBoard::bitScanReverse, // SOUTHEAST
+    BitBoard::bitScanReverse, // SOUTHWEST
+    BitBoard::bitScanForward, // NORTHWEST
+  };
 
-	public interface IExtractor {
-		long run(long bb);
-	}
+  public interface IExtractor {
+    long run(long bb);
+  }
 
-	public static final IExtractor[] extractors = {
-		BitBoard::extractLowest, // NORTH
-		BitBoard::extractLowest, // EAST
-		BitBoard::extractHighest, // SOUTH
-		BitBoard::extractHighest, // WEST
-		BitBoard::extractLowest, // NORTHEAST
-		BitBoard::extractHighest, // SOUTHEAST
-		BitBoard::extractHighest, // SOUTHWEST
-		BitBoard::extractLowest, // NORTHWEST
-	};
+  public static final IExtractor[] extractors = {
+    BitBoard::extractLowest, // NORTH
+    BitBoard::extractLowest, // EAST
+    BitBoard::extractHighest, // SOUTH
+    BitBoard::extractHighest, // WEST
+    BitBoard::extractLowest, // NORTHEAST
+    BitBoard::extractHighest, // SOUTHEAST
+    BitBoard::extractHighest, // SOUTHWEST
+    BitBoard::extractLowest, // NORTHWEST
+  };
 
   // WARNING: don't scroll down. it's bottomless.
   static {

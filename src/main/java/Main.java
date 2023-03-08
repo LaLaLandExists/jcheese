@@ -1,19 +1,16 @@
-import java.awt.BorderLayout;
+import java.awt.*;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.concurrent.CountDownLatch;
 
-import javax.swing.JFrame;
-import javax.swing.SwingUtilities;
-
-import jcheese.Board;
-import jcheese.FEN;
-import jcheese.Move;
-import jcheese.MoveGenerator;
-import jcheese.Piece;
+import jcheese.*;
 import jcheese.ai.RandomController;
 import jcheese.client.CLI;
 import jcheese.server.Server;
-import jcheese.swing_ui.BoardPane;
+import jcheese.swing_ui.Assets;
+import jcheese.swing_ui.BoardPanel;
+
+import javax.swing.*;
 
 public class Main {
   public static void randomGameTest() {
@@ -45,15 +42,14 @@ public class Main {
     new MoveGenerator().testForPerftree(depth, fen, ssans);
   }
 
-  public static void swingUITest() throws InterruptedException {
-    BoardPane bp = new BoardPane();
+  public static void swingUITest() {
+    BoardPanel bp = new BoardPanel();
     JFrame frame = new JFrame("The Test of Wills");
 
     SwingUtilities.invokeLater(() -> {
       frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
       frame.add(bp, BorderLayout.CENTER);
-      frame.setSize(640, 640);
-      frame.setLocation(80, 80);
+      frame.setSize(800, 800);
       frame.setVisible(true);
     });
 
@@ -61,77 +57,49 @@ public class Main {
     MoveGenerator gen = new MoveGenerator();
     FEN.loadFEN(mainBoard, Board.START_POS);
     ArrayList<Integer> moves = new ArrayList<>();
-    
-    final int thePlayer = Piece.LIGHT;
-    if (thePlayer != Piece.LIGHT) bp.setFlipped(true);
-    
+    bp.flipped = true;
+
     for (;;) {
+      CountDownLatch latch = new CountDownLatch(1);
+
       gen.getMoves(mainBoard, moves);
 
-      if (moves.size() == 0) {
-        if (gen.isChecked()) {
-          System.out.println("Checkmate!");
-        } else {
-          System.out.println("Stalemate!");
-        }
-        break;
-      }
+      if (moves.size() == 0 && gen.isChecked()) break;
 
-      bp.setBoard(mainBoard);
+      bp.updateBoard(mainBoard);
+      bp.repaint();
 
       int move;
-      if (mainBoard.getPlySide() == thePlayer) {
+      if (mainBoard.getPlySide() == Piece.DARK) {
         bp.setActions(moves, gen.getLastCheckers());
-        bp.setSelectables(mainBoard.bitboards[thePlayer]);
-        bp.awaitMove();
-        move = Move.findMove(moves, bp.getResponseSrc(), bp.getResponseDst(), bp.getResponseKind());
-        bp.setSelectables(0L);
-        bp.clearActions();
+
+        bp.queryForAction(new BoardPanel.IQueryIndicator() {
+          @Override
+          public void start() {
+            try {
+              latch.await();
+            } catch (InterruptedException exc) {
+              throw new RuntimeException("UI Thread was interrupted");
+            }
+          }
+
+          @Override
+          public void end() {
+            latch.countDown();
+          }
+        });
+        move = Move.findMove(moves, bp.getActionSrc(), bp.getActionDst(), bp.getActionPromoteKind());
       } else {
         move = moves.get((int) (Math.random() * moves.size()));
       }
 
       mainBoard.applyMove(move);
-      bp.setLastMove(move);
     }
 
     frame.dispose();
   }
   
-  private static void pvp() throws InterruptedException {
-      BoardPane bp = new BoardPane();
-      JFrame frame = new JFrame("Mikha vs Garol");
-      
-      SwingUtilities.invokeLater(() -> {
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.add(bp, BorderLayout.CENTER);
-        frame.setSize(640, 640);
-        frame.setLocation(80, 80);
-        frame.setVisible(true);
-      });
-      
-      Board board = new Board();
-      FEN.loadFEN(board, Board.START_POS);
-      MoveGenerator gen = new MoveGenerator();
-      ArrayList<Integer> moves = new ArrayList<>();
-      
-      int move;
-      for(;;) {
-          gen.getMoves(board, moves);
-          
-          bp.setBoard(board);
-          bp.setActions(moves, gen.getLastCheckers());
-          bp.setSelectables(board.bitboards[board.getPlySide()]);
-          bp.awaitMove();
-          move = Move.findMove(moves, bp.getResponseSrc(), bp.getResponseDst(), bp.getResponseKind());
-          bp.flip();
-          board.applyMove(move);
-          bp.setLastMove(move);
-      }
-      
-  }
-  
-  public static void main(String[] args) throws InterruptedException {
-    pvp();
+  public static void main(String[] args) {
+    swingUITest();
   }
 }

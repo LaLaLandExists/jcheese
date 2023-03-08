@@ -7,7 +7,7 @@ import java.util.*;
 import javax.imageio.ImageIO;
 
 public class Assets {
-	public static final Path IMAGES_PATH = Paths.get("./assets/images");
+  public static final Path IMAGES_PATH = Paths.get("./assets/images");
   private static final HashMap<String, BufferedImage> imageResources = new HashMap<>();
   
   static {
@@ -15,7 +15,7 @@ public class Assets {
     File assetDir = IMAGES_PATH.toFile();
     assert assetDir.exists() && assetDir.isDirectory(); // [IMAGES_PATH] must point to a directory
     try {
-      for (final File file : assetDir.listFiles()) {
+      for (final var file : assetDir.listFiles()) {
         if (file.isFile()) {
           imageResources.put(file.getName(), ImageIO.read(new FileInputStream(file)));
         }
