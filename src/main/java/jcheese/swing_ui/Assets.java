@@ -15,7 +15,7 @@ public class Assets {
     File assetDir = IMAGES_PATH.toFile();
     assert assetDir.exists() && assetDir.isDirectory(); // [IMAGES_PATH] must point to a directory
     try {
-      for (final var file : assetDir.listFiles()) {
+      for (final File file : assetDir.listFiles()) {
         if (file.isFile()) {
           imageResources.put(file.getName(), ImageIO.read(new FileInputStream(file)));
         }
