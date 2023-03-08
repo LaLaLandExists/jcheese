@@ -40,7 +40,7 @@ public class Server {
   }
 	
 	public int launch() {
-	  for (final var control : controls) {
+	  for (final IController control : controls) {
 	    if (control == null) throw new IllegalStateException("Must assign controller for a side");
 	  }
 	  
@@ -49,10 +49,14 @@ public class Server {
 	  ArrayList<Integer> legalMoves = new ArrayList<>();
 	  
 	  for (;;) {
-	    for (final var view : views) view.update();
+              views.forEach((view) -> {
+                  view.update();
+              });
 	    
 	    if (board.getHalfMoveClock() >= 100) {
-	      for (final var view : views) view.announceDraw(END_50_RULE);
+                views.forEach((view) -> {
+                    view.announceDraw(END_50_RULE);
+                  });
 	      return DRAW;
 	    }
 	    
@@ -61,15 +65,19 @@ public class Server {
 	    
 	    moveGen.getMoves(board, legalMoves);
 	    // No more legal moves. The current side is immobilized
-	    if (legalMoves.size() == 0) {
+	    if (legalMoves.isEmpty()) {
 	      if (moveGen.isChecked()) {
 	        int winningSide = Piece.invertSide(board.getPlySide());
-	        // Checkmate
-	        for (final var view : views) view.announceWin(END_CHECKMATE, winningSide);
+                  // Checkmate
+                  views.forEach((view) -> {
+                      view.announceWin(END_CHECKMATE, winningSide);
+                  });
 	        return winningSide;
 	      } else {
-	        // Stalemate
-	        for (final var view : views) view.announceDraw(END_STALEMATE);
+                  // Stalemate
+                  views.forEach((view) -> {
+                      view.announceDraw(END_STALEMATE);
+                  });
 	        return DRAW;
 	      }
 	    }

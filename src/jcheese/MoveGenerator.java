@@ -6,9 +6,7 @@ import jcheese.util.FEN;
 import jcheese.util.MoveData;
 import jcheese.util.MoveData.IScanner;
 
-import static jcheese.util.MoveData.NORTH;
 import static jcheese.util.MoveData.EAST;
-import static jcheese.util.MoveData.SOUTH;
 import static jcheese.util.MoveData.WEST;
 import static jcheese.util.MoveData.NORTHEAST;
 import static jcheese.util.MoveData.SOUTHEAST;
@@ -368,7 +366,8 @@ public class MoveGenerator {
 	public boolean isChecked() {
 	  return BitBoard.popCount(checkers) > 0;
 	}
-	
+	// Get the recently calculated checkers
+	public long getLastCheckers() { return checkers; }
 	public void getMoves(Board board, ArrayList<Integer> moves) {
 	  init(board, moves);
 	  getAllMoves();
@@ -383,7 +382,7 @@ public class MoveGenerator {
 	// A more memory expensive method but can tell the source squares
 	public void getSortedMoves(Board board, ArrayList<Integer>[] moves) {
 	  for (int move : getMoves(board)) {
-	    var subContainer = moves[Move.getSrc(move)];
+	    ArrayList<Integer> subContainer = moves[Move.getSrc(move)];
 	    assert subContainer != null;
 	    subContainer.add(move);
 	  }
@@ -396,7 +395,7 @@ public class MoveGenerator {
 	public ArrayList<Integer>[] newMoveContainer() {
 	  ArrayList<Integer>[] container = new ArrayList[Square.COUNT];
 	  for (int i = 0; i < container.length; ++i) {
-	    container[i] = new ArrayList<Integer>();
+	    container[i] = new ArrayList<>();
 	  }
 	  return container;
 	}

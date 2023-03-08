@@ -30,6 +30,19 @@ public class MoveData {
   public static final long[] doublePushes = new long[Piece.SIDE_COUNT];
   public static final int[] promoteRanks = new int[] { 7, 0 };
   public static final long[] enPassantRanks = new long[Piece.SIDE_COUNT];
+  
+  public static final int[] kingSrcSquares = new int[] {
+    Square.E1, Square.E8, Square.E1, Square.E8
+  };
+  public static final int[] kingDstSquares = new int[] {
+    Square.G1, Square.G8, Square.C1, Square.C8
+  };
+  public static final int[] rookSrcSquares = new int[] {
+    Square.H1, Square.H8, Square.A1, Square.A8
+  };
+  public static final int[] rookDstSquares = new int[] {
+    Square.F1, Square.F8, Square.D1, Square.D8
+  };
 
   // WARNING: don't scroll down. it's bottomless.
   static {

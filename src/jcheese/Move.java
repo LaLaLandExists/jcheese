@@ -28,6 +28,8 @@ public class Move {
   public static final int EP_BIT = 1 << 20;
   public static final int CASTLE_BIT = 1 << 21;
   public static final int PROMOTE_BIT = 1 << 22;
+  // Used to flag moves that cannot be deduced from a context
+  public static final int ERROR_BIT = 1 << 23;
 
   private Move() {} // Not instantiable
 
@@ -36,6 +38,7 @@ public class Move {
   public static boolean isEnPassant(int move) { return (move & EP_BIT) != 0; }
   public static boolean isCastle(int move) { return (move & CASTLE_BIT) != 0; }
   public static boolean isPromote(int move) { return (move & PROMOTE_BIT) != 0; }
+  public static boolean isError(int move) { return (move & ERROR_BIT) != 0; }
 
   public static int getSrc(int move) { return move & SRC_MASK; }
   public static int getDst(int move) { return (move & DST_MASK) >> DST_SHIFT; }
@@ -61,8 +64,18 @@ public class Move {
     return push(MoveData.kingSrcSquares[castle], MoveData.kingDstSquares[castle]) | CASTLE_BIT | (castle << OTHER_SHIFT);
   }
 
-  public static ArrayList<Integer> newList() { return new ArrayList<>(); }
-  
+  public static int findMove(ArrayList<Integer> moves, int srcSquare, int dstSquare, int promoteKind) {
+    for (final int move : moves) {
+      if (Move.getSrc(move) == srcSquare && Move.getDst(move) == dstSquare) {
+        if (Move.isPromote(move)) {
+          if (Move.getPromoteKind(move) == promoteKind) return move;
+        } else return move;
+      }
+    }
+    // This is error state. A move cannot be chosen from [moves], you do not want this
+    return ERROR_BIT;
+  }
+
   public static String getLAN(int move) {
     if (isCastle(move)) {
       switch (getCastle(move)) {
