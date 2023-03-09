@@ -3,14 +3,13 @@ package jcheese.swing_ui;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.concurrent.CountDownLatch;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
 
 import javax.swing.*;
-import javax.swing.border.BevelBorder;
-import javax.swing.border.Border;
-
+import javax.swing.border.*;
+import javax.swing.Timer;
 import jcheese.*;
 
 public class BoardPane extends JLayeredPane {
@@ -23,6 +22,7 @@ public class BoardPane extends JLayeredPane {
   private static final int GRID_LIGHT = 0;
   private static final int GRID_DARK = 1;
   private static final int SPRITE_COUNT = Piece.SIDE_COUNT * Piece.KIND_COUNT + 2;
+  private static final int ANIMATION_TICK_MS = 20;
   
   // Render elements
   private final Color[] gridColors = { DEFAULT_LIGHT_GRID_COLOR, DEFAULT_DARK_GRID_COLOR };
@@ -42,7 +42,7 @@ public class BoardPane extends JLayeredPane {
   
   // Dynamic render state
   private boolean isFlipped = false;
-  private boolean viewOnly = false;
+  private AtomicBoolean viewOnly = new AtomicBoolean(false);
   private int squareWidth;
   private int squareHeight;
   private int paneWidth;
@@ -51,6 +51,12 @@ public class BoardPane extends JLayeredPane {
   private int overrideSquare = Square.NIL;
   private int overridePiece = Piece.NONE;
   private Image[] scaledImages = new Image[SPRITE_COUNT];
+  
+  // Movements
+  private final DragMovement drag = new DragMovement();
+  private final PromoteAfterDragMovement padm = new PromoteAfterDragMovement();
+  private final Set<Movement> movements = ConcurrentHashMap.newKeySet();
+  private boolean ignoreLastMoveMovement = false;
   
   // Action hints
   private final long[] pushHints = new long[Square.COUNT];
@@ -66,10 +72,16 @@ public class BoardPane extends JLayeredPane {
   private Image dragImage;
   private long selectableSquares = BitBoard.allClear();
   private int responseSrc, responseDst, responseKind = Piece.QUEEN;
-  private CountDownLatch blocker;
+  private final Latch queryLatch = new Latch(1);
   
   // Board state
   private final Board board = new Board();
+  
+  // Movement state
+  private boolean suppressMovement = false;
+  private int currentX, currentY, deltaX, deltaY;
+  private int currentFrame, endFrame;
+  private int sourceSquare;
   
   private final PromoteChooserLayer promoteLayer = new PromoteChooserLayer();
   private final ILayer[] layers = {
@@ -79,6 +91,14 @@ public class BoardPane extends JLayeredPane {
     new HintLayer(),
     new BoardLayer(),
   };
+  
+  private final Timer animationClock = new Timer(ANIMATION_TICK_MS, (event) -> {
+    movements.forEach((movement) -> {
+      if (movement.nextTick()) {
+        movements.remove(movement);
+      }
+    });
+  });
   
   private static Color invertColor(Color color) {
     return new Color(0xFFFFFF - color.getRGB());
@@ -121,6 +141,9 @@ public class BoardPane extends JLayeredPane {
     for (int i = 0; i < layers.length; ++i) {
       add(layers[i].getComponent(), i);
     }
+    movements.add(drag);
+    movements.add(padm);
+    animationClock.start();
   }
   
   private int getXFromSquare(int square, float offsetX) {
@@ -146,18 +169,23 @@ public class BoardPane extends JLayeredPane {
     );
   }
   
+  private int getFileFromPoint(int x, int y) {
+    int file = x / squareWidth;
+    if (file > 7) return -1;
+    return isFlipped ? 7 - file : file;
+  }
+  private int getRankFromPoint(int x, int y) {
+    int rank = y / squareHeight;
+    if (rank > 7) return -1;
+    return isFlipped ? rank : 7 - rank;
+  }
+  
   private int getSquareFromPoint(int x, int y) {
-    int xOffset = x / squareWidth;
-    int yOffset = y / squareHeight;
+    int file = getFileFromPoint(x, y);
+    int rank = getRankFromPoint(x, y);
     
-    if (xOffset > 7 || yOffset > 7) return Square.NIL;
-    if (isFlipped) {
-      xOffset = 7 - xOffset;
-    } else {
-      yOffset = 7 - yOffset;
-    }
-    
-    return Square.fromCoords(xOffset, yOffset);
+    if (file == -1 || rank == -1) return Square.NIL;
+    return Square.fromCoords(file, rank);
   }
   private int getSquareFromPoint(Point pt) {
     return getSquareFromPoint(pt.x, pt.y);
@@ -322,11 +350,192 @@ public class BoardPane extends JLayeredPane {
     }
   } // class HintLayer
   
+  private abstract class Movement {
+    public int srcSquare;
+    
+    public Movement(int srcSquare) {
+      this.srcSquare = srcSquare;
+    }
+    
+    public boolean shouldRender(int square) {
+      // The default movement should omit the source square to avoid duplicates
+      return square != srcSquare;
+    }
+    
+    public abstract void paint(Graphics2D g2d);
+    public abstract boolean nextTick();
+    
+    public void flip() {}
+  }
+  
+  private class DragMovement extends Movement {
+    private int dragPiece = Piece.NONE;
+    
+    public DragMovement() { super(Square.NIL); }
+    
+	  @Override
+	  public void paint(Graphics2D g2d) {
+	  	if (dragPt != null) {
+	  	  g2d.drawImage(scaledImages[dragPiece], dragPt.x - squareWidth / 2,
+	  	    dragPt.y - squareHeight / 2, squareWidth, squareHeight, null);
+	  	}
+	  }
+	  
+	  @Override
+  	public boolean nextTick() {
+		  return false; // Drag Movement never expires
+	  }
+	  
+	  public void setSrc(int square) {
+	    srcSquare = square;
+	    dragPiece = board.getPiece(square);
+	  } 
+	  
+	  public void unset() {
+	    srcSquare = Square.NIL;
+	    dragPiece = Piece.NONE;
+	  }
+  } // class DragMovement
+  
+  private class PromoteAfterDragMovement extends Movement {
+    public static final int MAX_FRAMES = 7;
+    
+    private int dstSquare;
+    private int currentFrame;
+    private int cursorX, cursorY, deltaX, deltaY;
+    private int thePiece = Piece.NONE;
+    
+    public PromoteAfterDragMovement() {
+      super(Square.NIL);
+    }
+    
+    public void setSquares(int srcSquare, int dstSquare) {
+      this.srcSquare = srcSquare;
+      this.dstSquare = dstSquare;
+      
+      currentFrame = -1;
+      
+      cursorX = getXFromSquare(dstSquare, 0);
+      cursorY = getYFromSquare(dstSquare, 0);
+      
+      int diffX = getXFromSquare(srcSquare, 0) - cursorX;
+      int diffY = getYFromSquare(srcSquare, 0) - cursorY;
+      
+      deltaX = diffX / MAX_FRAMES;
+      deltaY = diffY / MAX_FRAMES;
+      
+      thePiece = board.getPiece(srcSquare);
+    }
+    
+    public void release() {
+      currentFrame = 0;
+    }
+    
+    public void discard() {
+      dstSquare = Square.NIL;
+      srcSquare = Square.NIL;
+    }
+    
+    @Override
+    public boolean shouldRender(int square) {
+      return srcSquare != square && dstSquare != square;
+    }
+    
+	  @Override
+  	public void paint(Graphics2D g2d) {
+  		if (dstSquare != Square.NIL) {
+  		  g2d.drawImage(scaledImages[thePiece], cursorX, cursorY, squareWidth, squareHeight, null);
+  		}
+  	}
+
+  	@Override
+  	public boolean nextTick() {
+  	  if (currentFrame != -1) {
+  	    if (currentFrame++ < MAX_FRAMES) {
+		      cursorX += deltaX;
+		      cursorY += deltaY;
+		    } else {
+		      discard();
+		    }
+		    repaint();
+		  }
+		  return false; // This movement never expires
+  	}
+  	
+  	@Override
+  	public void flip() {
+  	  cursorX = paneWidth - cursorX;
+  	  cursorY = paneHeight - cursorY;
+  	  deltaX = -deltaX;
+  	  deltaY = -deltaY;
+  	}
+  } // class PromoteAfterDragMovement
+  
+  private class MoveMovement extends Movement {
+    public static final int MAX_FRAMES = 7;
+    
+    private final int dstSquare;
+    private int cursorX, cursorY, deltaX, deltaY;
+    private int thePiece = Piece.NONE;
+    private int currentFrame = 0;
+    
+    public MoveMovement(int srcSquare, int dstSquare) {
+      super(srcSquare);
+      
+      this.dstSquare = dstSquare;
+      cursorX = getXFromSquare(srcSquare, 0);
+      cursorY = getYFromSquare(srcSquare, 0);
+      
+      int diffX = getXFromSquare(dstSquare, 0) - cursorX;
+      int diffY = getYFromSquare(dstSquare, 0) - cursorY;;
+      
+      deltaX = diffX / MAX_FRAMES;
+      deltaY = diffY / MAX_FRAMES;
+      
+      thePiece = board.getPiece(srcSquare);
+      
+      movements.add(this);
+    }
+    
+    @Override
+    public boolean shouldRender(int square) {
+      return dstSquare != square;
+    }
+
+  	@Override
+	  public void paint(Graphics2D g2d) {
+		  g2d.drawImage(scaledImages[thePiece], cursorX, cursorY, squareWidth, squareHeight, null);
+	  }
+
+	  @Override
+	  public boolean nextTick() {
+		  if (currentFrame++ < MAX_FRAMES) {
+		    cursorX += deltaX;
+		    cursorY += deltaY;
+		    repaint();
+		    return false;
+		  } else {
+		    movements.remove(this);
+		    repaint();
+		    return true;
+		  }
+	  }
+	  
+	  @Override
+	  public void flip() {
+	    cursorX = paneWidth - cursorX;
+	    cursorY = paneHeight - cursorY;
+	    deltaX = -deltaX;
+	    deltaY = -deltaY;
+	  }
+  }
+  
   private class SpriteLayer extends JPanel implements ILayer {
     public static final long serialVersionUID = 0;
     
     public SpriteLayer() {
       setOpaque(false);
+      setDoubleBuffered(true);
     }
     
     @Override public void updateBounds() { this.setBounds(0, 0, paneWidth, paneHeight); }
@@ -339,24 +548,21 @@ public class BoardPane extends JLayeredPane {
       for (int ptY = 0; ptY < paneHeight; ptY += squareHeight) {
         for (int ptX = 0; ptX < paneWidth; ptX += squareWidth) {
           int square = getSquareFromPoint(ptX, ptY);
-          if (square == omittedSquare) continue;
+          int piece = board.getPiece(square);
           
-          int piece = Piece.NONE;
+          for (final Movement movement : movements) {
+            if (!movement.shouldRender(square)) piece = Piece.NONE;
+          }
+          
           if (square == overrideSquare) {
             piece = overridePiece;
-          } else if (square != Square.NIL) {
-            piece = board.getPiece(square);
           }
+          
           g2d.drawImage(scaledImages[piece], ptX, ptY, squareWidth, squareHeight, null);
         }
       }
       
-      if (dragPt != null) {
-        g2d.drawImage(
-          dragImage, dragPt.x - squareWidth / 2,
-          dragPt.y - squareHeight / 2, squareWidth, squareHeight, null
-        );
-      }
+      movements.forEach((movement) -> movement.paint(g2d));
     }
   } // class SpriteLayer
   
@@ -364,6 +570,7 @@ public class BoardPane extends JLayeredPane {
     selectedSquare = Square.NIL;
     dragPt = null;
     dragImage = null;
+    drag.unset();
     repaint();
   }
   
@@ -396,7 +603,7 @@ public class BoardPane extends JLayeredPane {
   }
   
   private void releaseBlocker() {
-    if (blocker != null) blocker.countDown();
+    queryLatch.countDown();
   }
   
   private boolean isPromoteAction(int srcSquare, int dstSquare) {
@@ -406,8 +613,7 @@ public class BoardPane extends JLayeredPane {
   
   private void chooserState(int srcSquare, int dstSquare) {
     if (dragPt != null) {
-      overrideSquare = dstSquare;
-      overridePiece = board.getPiece(srcSquare);
+      padm.setSquares(srcSquare, dstSquare);
     }
     semiBlankState();
     promoteLayer.show(dstSquare);
@@ -423,14 +629,17 @@ public class BoardPane extends JLayeredPane {
       addMouseListener(new MouseAdapter() {
         @Override
         public void mousePressed(MouseEvent event) {
-          if (viewOnly) return;
+          if (viewOnly.get()) return;
           
           if (SwingUtilities.isRightMouseButton(event)) {
             blankState();
             return;
           }
           
-          if (inChooserState()) blankState();
+          if (inChooserState()) {
+            padm.release();
+            blankState();
+          }
           
           int clickedSquare = getSquareFromPoint(event.getPoint());
           // If user selected something in blank state
@@ -451,7 +660,7 @@ public class BoardPane extends JLayeredPane {
         
         @Override
         public void mouseReleased(MouseEvent event) {
-          if (viewOnly) return;
+          if (viewOnly.get()) return;
           
           if (dragPt != null) {
             int dstSquare = getSquareFromPoint(event.getPoint());
@@ -474,13 +683,12 @@ public class BoardPane extends JLayeredPane {
       addMouseMotionListener(new MouseMotionAdapter() {
         @Override
         public void mouseDragged(MouseEvent event) {
-          if (viewOnly) return;
+          if (viewOnly.get()) return;
           
           if (selectedSquare != Square.NIL) {
             dragPt = event.getPoint();
-            // Omit the selected square for dragging effect
-            omittedSquare = selectedSquare;
-            // Update everything
+            drag.setSrc(selectedSquare);
+            ignoreLastMoveMovement = true;
             repaint();
           }
         }
@@ -505,6 +713,7 @@ public class BoardPane extends JLayeredPane {
       button.setForeground(gridColors[GRID_DARK]);
       button.addActionListener((event) -> {
         responseKind = pieceKind;
+        padm.discard();
         releaseBlocker();
         blankState();
       });
@@ -603,19 +812,37 @@ public class BoardPane extends JLayeredPane {
     blankState();
   }
   public void setFlipped(boolean isFlipped) {
-    this.isFlipped = isFlipped;
-    blankState();
+    if (this.isFlipped != isFlipped) {
+      for (final Movement movement : movements) {
+        movement.flip();
+      }
+      this.isFlipped = isFlipped;
+      blankState();
+    }
   }
   public void setReactive(boolean isReactive) {
-    this.viewOnly = !isReactive;
+    viewOnly.set(!viewOnly.get());
     blankState();
   }
   public void setLastMove(int move) {
-    lastSrcHint = BitBoard.bit(Move.getSrc(move));
-    lastDstHint = BitBoard.bit(Move.getDst(move));
+    int src = Move.getSrc(move);
+    int dst = Move.getDst(move);
+    
+    lastSrcHint = BitBoard.bit(src);
+    lastDstHint = BitBoard.bit(dst);
+    
+    if (!ignoreLastMoveMovement) new MoveMovement(src, dst);
+    if (Move.isCastle(move)) {
+      int castle = Move.getCastle(move);
+      new MoveMovement(MoveData.rookSrcSquares[castle], MoveData.rookDstSquares[castle]);
+    }
+    
+    ignoreLastMoveMovement = false;
     repaint();
   }
-        public void flip() { isFlipped = !isFlipped; }
+  
+  public void flip() { setFlipped(!isFlipped); }
+  
   public void clearLastMove() {
     lastSrcHint = BitBoard.allClear();
     lastDstHint = BitBoard.allClear();
@@ -630,9 +857,7 @@ public class BoardPane extends JLayeredPane {
   public int getResponseKind() { return responseKind; }
   
   public void awaitMove() throws InterruptedException {
-    blocker = new CountDownLatch(1);
-    blocker.await();
-    // The user has submitted a move
-    blocker = null;
+    queryLatch.reset();
+    queryLatch.await();
   }
 }

@@ -124,7 +124,6 @@ public class Main {
           bp.setSelectables(board.bitboards[board.getPlySide()]);
           bp.awaitMove();
           move = Move.findMove(moves, bp.getResponseSrc(), bp.getResponseDst(), bp.getResponseKind());
-          bp.flip();
           board.applyMove(move);
           bp.setLastMove(move);
       }
@@ -132,6 +131,6 @@ public class Main {
   }
   
   public static void main(String[] args) throws InterruptedException {
-    pvp();
+    swingUITest();
   }
 }
