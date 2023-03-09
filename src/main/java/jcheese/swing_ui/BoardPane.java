@@ -1,16 +1,18 @@
 package jcheese.swing_ui;
 
+import jcheese.*;
+
+import javax.swing.*;
+import javax.swing.border.BevelBorder;
+import javax.swing.border.Border;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-
-import javax.swing.*;
-import javax.swing.border.*;
-import javax.swing.Timer;
-import jcheese.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class BoardPane extends JLayeredPane {
   // To suppress the serial warning
@@ -42,7 +44,7 @@ public class BoardPane extends JLayeredPane {
   
   // Dynamic render state
   private boolean isFlipped = false;
-  private AtomicBoolean viewOnly = new AtomicBoolean(false);
+  private boolean viewOnly;
   private int squareWidth;
   private int squareHeight;
   private int paneWidth;
@@ -169,20 +171,20 @@ public class BoardPane extends JLayeredPane {
     );
   }
   
-  private int getFileFromPoint(int x, int y) {
+  private int getFileFromPoint(int x) {
     int file = x / squareWidth;
     if (file > 7) return -1;
     return isFlipped ? 7 - file : file;
   }
-  private int getRankFromPoint(int x, int y) {
+  private int getRankFromPoint(int y) {
     int rank = y / squareHeight;
     if (rank > 7) return -1;
     return isFlipped ? rank : 7 - rank;
   }
   
   private int getSquareFromPoint(int x, int y) {
-    int file = getFileFromPoint(x, y);
-    int rank = getRankFromPoint(x, y);
+    int file = getFileFromPoint(x);
+    int rank = getRankFromPoint(y);
     
     if (file == -1 || rank == -1) return Square.NIL;
     return Square.fromCoords(file, rank);
@@ -194,7 +196,11 @@ public class BoardPane extends JLayeredPane {
   private static int getPixelFontSize(int pixels) {
     return (int) (138.0 * pixels / Toolkit.getDefaultToolkit().getScreenResolution());
   }
-  
+
+  public void dispose() {
+    animationClock.stop();
+  }
+
   private interface ILayer {
     void updateBounds();
     Component getComponent();
@@ -548,6 +554,7 @@ public class BoardPane extends JLayeredPane {
       for (int ptY = 0; ptY < paneHeight; ptY += squareHeight) {
         for (int ptX = 0; ptX < paneWidth; ptX += squareWidth) {
           int square = getSquareFromPoint(ptX, ptY);
+          if (square == Square.NIL) continue;
           int piece = board.getPiece(square);
           
           for (final Movement movement : movements) {
@@ -629,7 +636,7 @@ public class BoardPane extends JLayeredPane {
       addMouseListener(new MouseAdapter() {
         @Override
         public void mousePressed(MouseEvent event) {
-          if (viewOnly.get()) return;
+          if (viewOnly) return;
           
           if (SwingUtilities.isRightMouseButton(event)) {
             blankState();
@@ -660,7 +667,7 @@ public class BoardPane extends JLayeredPane {
         
         @Override
         public void mouseReleased(MouseEvent event) {
-          if (viewOnly.get()) return;
+          if (viewOnly) return;
           
           if (dragPt != null) {
             int dstSquare = getSquareFromPoint(event.getPoint());
@@ -683,7 +690,7 @@ public class BoardPane extends JLayeredPane {
       addMouseMotionListener(new MouseMotionAdapter() {
         @Override
         public void mouseDragged(MouseEvent event) {
-          if (viewOnly.get()) return;
+          if (viewOnly) return;
           
           if (selectedSquare != Square.NIL) {
             dragPt = event.getPoint();
@@ -821,7 +828,7 @@ public class BoardPane extends JLayeredPane {
     }
   }
   public void setReactive(boolean isReactive) {
-    viewOnly.set(!viewOnly.get());
+    viewOnly = !isReactive;
     blankState();
   }
   public void setLastMove(int move) {
