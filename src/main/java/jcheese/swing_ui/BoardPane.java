@@ -594,6 +594,7 @@ public class BoardPane extends JLayeredPane {
   }
   
   private void selectedState(int selected) {
+    ignoreLastMoveMovement = false;
     if (isSelectable(selected)) {
       selectedSquare = selected;
       dragImage = scaledImages[board.getPiece(selected)];
