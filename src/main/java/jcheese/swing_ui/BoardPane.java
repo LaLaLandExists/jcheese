@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class BoardPane extends JLayeredPane {
   // To suppress the serial warning
@@ -59,7 +58,7 @@ public class BoardPane extends JLayeredPane {
   private final PromoteAfterDragMovement padm = new PromoteAfterDragMovement();
   private final Set<Movement> movements = ConcurrentHashMap.newKeySet();
   private boolean ignoreLastMoveMovement = false;
-  
+
   // Action hints
   private final long[] pushHints = new long[Square.COUNT];
   private final long[] captureHints = new long[Square.COUNT];
@@ -71,19 +70,12 @@ public class BoardPane extends JLayeredPane {
   // Interaction state
   private int selectedSquare = Square.NIL;
   private Point dragPt;
-  private Image dragImage;
   private long selectableSquares = BitBoard.allClear();
   private int responseSrc, responseDst, responseKind = Piece.QUEEN;
   private final Latch queryLatch = new Latch(1);
   
   // Board state
   private final Board board = new Board();
-  
-  // Movement state
-  private boolean suppressMovement = false;
-  private int currentX, currentY, deltaX, deltaY;
-  private int currentFrame, endFrame;
-  private int sourceSquare;
   
   private final PromoteChooserLayer promoteLayer = new PromoteChooserLayer();
   private final ILayer[] layers = {
@@ -127,6 +119,7 @@ public class BoardPane extends JLayeredPane {
     addComponentListener(new ComponentAdapter() {
       @Override
       public void componentResized(ComponentEvent event) {
+        super.componentResized(event);
         paneWidth = getWidth();
         paneHeight = getHeight();
         squareWidth = paneWidth / Square.FILE_COUNT;
@@ -137,6 +130,7 @@ public class BoardPane extends JLayeredPane {
         }
         for (final ILayer layer : layers) layer.updateBounds();
         blankState();
+        revalidate();
       }
     });
     
@@ -478,7 +472,7 @@ public class BoardPane extends JLayeredPane {
   } // class PromoteAfterDragMovement
   
   private class MoveMovement extends Movement {
-    public static final int MAX_FRAMES = 7;
+    public static final int MAX_FRAMES = 6;
     
     private final int dstSquare;
     private int cursorX, cursorY, deltaX, deltaY;
@@ -499,7 +493,8 @@ public class BoardPane extends JLayeredPane {
       deltaY = diffY / MAX_FRAMES;
       
       thePiece = board.getPiece(srcSquare);
-      
+
+      omittedSquare = srcSquare;
       movements.add(this);
     }
     
@@ -564,7 +559,11 @@ public class BoardPane extends JLayeredPane {
           if (square == overrideSquare) {
             piece = overridePiece;
           }
-          
+
+          if (square == omittedSquare) {
+            piece = Piece.NONE;
+          }
+
           g2d.drawImage(scaledImages[piece], ptX, ptY, squareWidth, squareHeight, null);
         }
       }
@@ -576,7 +575,6 @@ public class BoardPane extends JLayeredPane {
   private void semiBlankState() {
     selectedSquare = Square.NIL;
     dragPt = null;
-    dragImage = null;
     drag.unset();
     repaint();
   }
@@ -597,7 +595,6 @@ public class BoardPane extends JLayeredPane {
     ignoreLastMoveMovement = false;
     if (isSelectable(selected)) {
       selectedSquare = selected;
-      dragImage = scaledImages[board.getPiece(selected)];
       repaint();
       return;
     }
@@ -867,5 +864,13 @@ public class BoardPane extends JLayeredPane {
   public void awaitMove() throws InterruptedException {
     queryLatch.reset();
     queryLatch.await();
+  }
+
+  public void awaitAnimation() throws InterruptedException {
+    for (;;) {
+      if (movements.size() <= 2) {
+        return;
+      }
+    }
   }
 }

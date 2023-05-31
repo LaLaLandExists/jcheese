@@ -12,42 +12,15 @@ import jcheese.MoveGenerator;
 import jcheese.Piece;
 import jcheese.ai.RandomController;
 import jcheese.client.CLI;
+import jcheese.katubuyan.Katubuyan;
+import jcheese.katubuyan.StartScreen;
 import jcheese.server.Server;
 import jcheese.swing_ui.BoardPane;
 
 public class Main {
-  public static void randomGameTest() {
-    Server server = new Server();
-    
-    RandomController random = new RandomController();
-    server.setDarkControl(random);
-    server.setLightControl(random);
-    server.addView(new CLI());
-    
-    server.launch();
-    
-    System.out.printf("Random seed = %d\n", random.seed);
-  }
-  
-  public static void perftreeTest(String[] args) {
-    int processed = 0;
-    int depth = Integer.parseInt(args[processed++]);
-    String fen = args[processed++];
-    fen = fen.substring(1, fen.length() - 1);
-    
-    String[] ssans;
-    if (processed < args.length) {
-      ssans = Arrays.copyOfRange(args, processed, args.length);
-    } else {
-      ssans = new String[] {};
-    }
-    
-    new MoveGenerator().testForPerftree(depth, fen, ssans);
-  }
-
   public static void swingUITest() throws InterruptedException {
     BoardPane bp = new BoardPane();
-    JFrame frame = new JFrame("The Test of Wills");
+    JFrame frame = new JFrame("Random AI Test");
 
     SwingUtilities.invokeLater(() -> {
       frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -93,6 +66,9 @@ public class Main {
 
       mainBoard.applyMove(move);
       bp.setLastMove(move);
+      //Thread.sleep(250);
+
+      bp.awaitAnimation();
     }
 
     frame.dispose();
@@ -100,12 +76,12 @@ public class Main {
   
   private static void pvp() throws InterruptedException {
       BoardPane bp = new BoardPane();
-      JFrame frame = new JFrame("Mikha vs Garol");
+      JFrame frame = new JFrame("Over-the-Board Test");
       
       SwingUtilities.invokeLater(() -> {
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.add(bp, BorderLayout.CENTER);
-        frame.setSize(640, 640);
+        frame.setSize(800, 800);
         frame.setLocation(80, 80);
         frame.setVisible(true);
       });
@@ -126,11 +102,15 @@ public class Main {
           move = Move.findMove(moves, bp.getResponseSrc(), bp.getResponseDst(), bp.getResponseKind());
           board.applyMove(move);
           bp.setLastMove(move);
+          bp.awaitAnimation();
       }
       
   }
-  
+
   public static void main(String[] args) throws InterruptedException {
-    swingUITest();
+    SwingUtilities.invokeLater(() -> {
+      Katubuyan kt = new Katubuyan();
+      kt.setVisible(true);
+    });
   }
 }
