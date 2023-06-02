@@ -49,6 +49,7 @@ public class Board {
   private int epSquare = Square.NIL;
   private int halfMoveClock;
   private int fullMoveNumber;
+  private final MoveHistory history = new MoveHistory();
 
   public Board() { reset(); }
 
@@ -222,6 +223,48 @@ public class Board {
     ++halfMoveClock;
   }
 
+  public int revert() {
+    if (history.size() == 0) return Move.error();
+
+    long entry = history.popLast();
+    int move = MoveHistory.getMove(entry);
+
+    if (MoveHistory.hasLightKingCastle(Board.LIGHT_KING_CASTLE)) {
+      enableCastle(Board.LIGHT_KING_CASTLE);
+    } else {
+      disableCastle(Board.LIGHT_KING_CASTLE);
+    }
+
+    if (MoveHistory.hasLightKingCastle(Board.DARK_KING_CASTLE)) {
+      enableCastle(Board.DARK_KING_CASTLE);
+    } else {
+      disableCastle(Board.DARK_KING_CASTLE);
+    }
+
+    if (MoveHistory.hasLightKingCastle(Board.LIGHT_QUEEN_CASTLE)) {
+      enableCastle(Board.LIGHT_QUEEN_CASTLE);
+    } else {
+      disableCastle(Board.LIGHT_QUEEN_CASTLE);
+    }
+
+    if (MoveHistory.hasLightKingCastle(Board.DARK_QUEEN_CASTLE)) {
+      enableCastle(Board.DARK_QUEEN_CASTLE);
+    } else {
+      disableCastle(Board.DARK_QUEEN_CASTLE);
+    }
+
+    int epSquare = MoveHistory.getEnPassant(entry);
+    if (epSquare == Square.NIL) {
+      clearEpSquare();
+    } else {
+      setEpSquare(epSquare);
+    }
+
+    setHalfMoveClock(MoveHistory.getHmoveClock(entry));
+
+    return move;
+  }
+
   public long[] getBoards() { return bitboards; }
   
   public boolean isValid() {
@@ -254,12 +297,9 @@ public class Board {
         }
       }
     }
-    
-    if (halfMoveClock != 0 && epSquare != Square.NIL) return false; // Recent pawn push. Half move clock must be zero
-    
+
+    return halfMoveClock == 0 || epSquare == Square.NIL; // Recent pawn push. Half move clock must be zero
     // FIXME: Assert that opponent king should not be checked
-    
-    return true;
   }
 
   private static final String LINE_DELIMITER = "  +---+---+---+---+---+---+---+---+\n";

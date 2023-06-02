@@ -63,6 +63,9 @@ public class Move {
   public static int castle(int castle) {
     return push(MoveData.kingSrcSquares[castle], MoveData.kingDstSquares[castle]) | CASTLE_BIT | (castle << OTHER_SHIFT);
   }
+  public static int error() {
+    return ERROR_BIT;
+  }
 
   public static int findMove(ArrayList<Integer> moves, int srcSquare, int dstSquare, int promoteKind) {
     for (final int move : moves) {

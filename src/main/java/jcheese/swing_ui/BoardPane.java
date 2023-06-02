@@ -1,6 +1,7 @@
 package jcheese.swing_ui;
 
 import jcheese.*;
+import jcheese.util.*;
 
 import javax.swing.*;
 import javax.swing.border.BevelBorder;
@@ -190,7 +191,7 @@ public class BoardPane extends JLayeredPane {
   private static int getPixelFontSize(int pixels) {
     return (int) (138.0 * pixels / Toolkit.getDefaultToolkit().getScreenResolution());
   }
-
+  
   public void dispose() {
     animationClock.stop();
   }
@@ -637,6 +638,7 @@ public class BoardPane extends JLayeredPane {
           if (viewOnly) return;
           
           if (SwingUtilities.isRightMouseButton(event)) {
+            padm.release();
             blankState();
             return;
           }

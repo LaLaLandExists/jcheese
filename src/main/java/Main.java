@@ -1,20 +1,12 @@
 import java.awt.BorderLayout;
 import java.util.ArrayList;
-import java.util.Arrays;
 
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 
-import jcheese.Board;
-import jcheese.FEN;
-import jcheese.Move;
-import jcheese.MoveGenerator;
-import jcheese.Piece;
-import jcheese.ai.RandomController;
-import jcheese.client.CLI;
+import jcheese.*;
+import jcheese.util.FEN;
 import jcheese.katubuyan.Katubuyan;
-import jcheese.katubuyan.StartScreen;
-import jcheese.server.Server;
 import jcheese.swing_ui.BoardPane;
 
 public class Main {
@@ -107,10 +99,10 @@ public class Main {
       
   }
 
-  public static void main(String[] args) throws InterruptedException {
-    SwingUtilities.invokeLater(() -> {
-      Katubuyan kt = new Katubuyan();
-      kt.setVisible(true);
-    });
+  public static void main(String[] args) {
+//    SwingUtilities.invokeLater(() -> {
+//      Katubuyan kt = new Katubuyan();
+//      kt.setVisible(true);
+//    });
   }
 }

@@ -1,6 +1,7 @@
 package jcheese.katubuyan;
 
 import jcheese.*;
+import jcheese.util.*;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -43,6 +44,7 @@ public class Katubuyan extends JFrame {
 
   private final SquaringPanel display;
   private final StartScreen start;
+  private final GameScreen gameScreen;
   private final GameOptions options;
 
   public static class GameOptions {
@@ -119,6 +121,7 @@ public class Katubuyan extends JFrame {
 
     options = new GameOptions();
     start = new StartScreen(options, this::onGameStart);
+    gameScreen = new GameScreen();
     display = new SquaringPanel(start, Color.DARK_GRAY);
     add(display, BorderLayout.CENTER);
   }
@@ -126,14 +129,16 @@ public class Katubuyan extends JFrame {
   private void onGameStart() {
     new Thread(() -> {
       try {
-        GameScreen gs = new GameScreen(options.playerColor);
-        display.setPanel(gs);
+        gameScreen.refresh(options.playerColor);
+        display.setPanel(gameScreen);
         display.revalidate();
-        game(gs, options.playerColor);
+        game(gameScreen, options.playerColor);
       } catch (InterruptedException e) {
         JOptionPane.showMessageDialog(null, "Game thread interrupted");
         System.exit(-5);
       }
+      
+//      System.out.println("Thread killed");
     }).start();
   }
 }
